@@ -1,4 +1,5 @@
 library(tidyverse)
+library(lubridate)
 
 setwd("/Users/reibertoldi/Documents/UBC/EOSC 510/Final Project/")
 
@@ -13,9 +14,31 @@ head(stations)
 ggplot(stations) +
   geom_point(aes(x = longitude, y = latitude))
 
+merge_df <- left_join(groundwater, stations, by = "site_code") %>% 
+  mutate(msmt_date_mdy = as.POSIXct(msmt_date,format = "%m/%d/%Y")) 
 
-merge_df <- left_join(groundwater, stations, by = "site_code")
+count_stations <- merge_df %>% 
+  group_by(site_code) %>% 
+  summarise(count = n()) %>% 
+  filter(count >= 1000) 
+stations_use <- unique(count_stations$site_code)
+  
+merge_use <- merge_df %>% 
+  filter(site_code %in% stations_use)
 
+explore_dates <- merge_use %>% 
+  group_by(site_code) %>% 
+  summarise(min = min(msmt_date_mdy),
+            max = max(msmt_date_mdy))
+
+daily_station_count <- daily %>% 
+  group_by(STATION) %>% 
+  summarise(count = n())
+
+explore_dates_daily <- daily %>% 
+  mutate(msmt_date_mdy = format(as.Date(MSMT_DATE), "%Y-%m"))
+
+nrow(filter(groundwater, is.na(gwe)))
 
 length(unique(groundwater$site_code))
 length(unique(stations$site_code))
