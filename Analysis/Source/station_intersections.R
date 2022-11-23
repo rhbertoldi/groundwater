@@ -109,6 +109,38 @@ intersection_counts <- final_intersections %>%
   group_by(bad_site_code) %>% 
   summarise(count = n())
 
+# for training (random missing)
+
+out_complete <- st_intersects(complete_join_sf, complete_join_sf)
+dfs2 <- lapply(out_complete, data.frame, stringsAsFactors = FALSE)
+complete_intersections <- map_dfr(dfs2, .f = cbind, .id = 'index') %>% 
+  rename("good_site" = "X..i..")
+
+index1 <- complete_join_sf %>% select(site_code, good_site) %>% 
+  mutate(good_site = as.numeric(good_site)) %>% st_set_geometry(NULL)
+
+final_intersections2 <- left_join(complete_intersections, index1, by = "good_site") %>% 
+  mutate(index = as.numeric(index)) %>% 
+  rename("site_code2" = "site_code") %>% 
+  select(-good_site) %>% 
+  rename("good_site" = "index") %>% 
+  left_join(., index1, by = "good_site") %>% 
+  rename("site_code1" = "site_code") %>% 
+  select(site_code1, site_code2)
+
+intersection_counts2 <- final_intersections2 %>% 
+  group_by(site_code1) %>% 
+  summarise(count = n())
+
+filled_dates %>% 
+  filter(site_code == "338784N1175800W001") %>% 
+  ggplot() +
+  geom_point(aes(x=dates, y=mean_gse)) + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+# 12 intersections
+
+# to predict 
+
 filled_dates %>% 
   filter(site_code == "389261N1213426W001") %>% 
   ggplot() +
@@ -121,3 +153,51 @@ filled_dates %>%
   geom_point(aes(x=dates, y=mean_gse))
 # 4 intersections
 
+# cleaning data for export
+
+wide_df <- complete_ids %>% 
+  spread(site_code, mean_gse)
+write.csv(wide_df, "Analysis/Build/data_for_PCA.csv", row.names = FALSE)
+
+# running linear model
+
+test <- final_intersections2 %>% 
+  filter(site_code1 == "392145N1214873W001")
+test_ids <- unique(test$site_code2)
+
+to_predict <- complete_ids %>% 
+  filter(site_code %in% test_ids) %>% 
+  spread(site_code, mean_gse) %>% 
+  separate(col = dates,
+           into = c("year", "month"),
+           sep = "-") %>% 
+  rename("y" = "392145N1214873W001") %>% 
+  select(year, month, y, everything()) %>% 
+  mutate(gse_means = rowMeans(.[,4:12])) %>% 
+  select(year, month, y, gse_means) %>% 
+  mutate(month = as.numeric(month),
+         year = as.numeric(year)) %>% 
+  mutate(month2 = month*month,
+         year2 = year*year) 
+
+
+predict_missing <- to_predict %>% 
+  mutate(y = ifelse(row_number() %in% round(runif(20, 1, 72)),
+                    NA_real_, y)) 
+
+mod <- lm(y ~ year + year2 + month + month2 + gse_means, data = predict_missing)         
+summary(mod)         
+
+to_predict$y_predicted <- predict(mod, to_predict)
+
+ggplot(to_predict) +
+  geom_point(aes(x = y, y = y_predicted)) +
+  geom_abline(slope=1)
+
+sqrt(mean(mod$residuals^2))
+
+
+predict_out <- predict_missing %>% 
+  select(year, month, y, gse_means)
+write.csv(predict_out, "Analysis/Build/data_for_tree.csv", row.names = FALSE)
+write.csv(to_predict, "Analysis/Build/data_for_tree_complete.csv", row.names = FALSE)
