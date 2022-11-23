@@ -131,6 +131,7 @@ final_intersections2 <- left_join(complete_intersections, index1, by = "good_sit
 intersection_counts2 <- final_intersections2 %>% 
   group_by(site_code1) %>% 
   summarise(count = n())
+write.csv(final_intersections2, "Analysis/Build/complete_intersections.csv", row.names = FALSE)
 
 filled_dates %>% 
   filter(site_code == "338784N1175800W001") %>% 
@@ -138,6 +139,8 @@ filled_dates %>%
   geom_point(aes(x=dates, y=mean_gse)) + 
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 # 12 intersections
+
+# creating dfs
 
 # to predict 
 
